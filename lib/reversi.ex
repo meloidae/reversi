@@ -13,7 +13,7 @@ defmodule Reversi do
 
   """
 
-  def game_loop(board, player, prev_pass) do
+  def game_loop(board, player, prev_pass, ai_fn) do
     curr_pass = Board.pass?(board)
     case {prev_pass, curr_pass} do
       {true, true} ->
@@ -26,15 +26,15 @@ defmodule Reversi do
         IO.puts "Pass"
         # Print stuff
         # To next turn
-        game_loop(Board.switch_turn(board), player, true)
+        game_loop(Board.switch_turn(board), player, true, ai_fn)
       {_, false} ->
         # Play on normally, regardless of prev turn
         new_board = if player == board.turn do
           Board.switch_turn(player_turn(board))
         else
-          Board.switch_turn(board)
+          Board.switch_turn(ai_turn(board, ai_fn))
         end
-        game_loop(new_board, player, false)
+        game_loop(new_board, player, false, ai_fn)
     end
   end
 
@@ -69,7 +69,10 @@ defmodule Reversi do
     end
   end
 
-  def ai_turn(board) do
+  def ai_turn(board, ai_fn) do
+    move = ai_fn.(board)
+    {black, white} = Board.flip(board, move)
+    %{board | black: black, white: white}
   end
 
 end
@@ -82,7 +85,8 @@ defmodule Reversi.CLI do
     player = if options[:player] < 0, do: Board.turn_black, else: Board.turn_white
     board = Board.new()
     # mcts_tables = MCTS.init(board)
-    Reversi.game_loop(board, player, false)
+    ai_fn = &RandomAI.turn/1
+    Reversi.game_loop(board, player, false, ai_fn)
   end
 end
 
