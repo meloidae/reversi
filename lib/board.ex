@@ -14,9 +14,9 @@ defmodule Board do
 
   def new(black \\ @default_black, white \\ @default_white) do
     # Test code
-    test_board = 0x12_34_01_10_80_08_40_04
-    IO.puts move_to_bit_string(test_board)
-    moves_to_list(test_board) |> Enum.map(fn x -> IO.puts move_to_bit_string(x) end)
+    # test_board = 0x12_34_01_10_80_08_40_04
+    # IO.puts move_to_bit_string(test_board)
+    # moves_to_list(test_board) |> Enum.map(fn x -> IO.puts move_to_bit_string(x) end)
     # Test end
     %Board{white: white, black: black, turn: -1, move: 1}
   end
@@ -112,18 +112,26 @@ defmodule Board do
   # Break up moves bits into list of moves (one-hot integers)
   def moves_to_list(moves) do
     (for <<byte::8 <- :binary.encode_unsigned(moves, :little)>>, do: byte)
-    |> Enum.with_index()
-    |> Enum.flat_map(fn {x, i} -> lookup_moves(x, i) end)
+    |> Stream.with_index()
+    |> Enum.flat_map(fn {x, i} -> lookup_move_list(x, i) end)
+  end
+
+  # Get indices of set bits
+  def moves_to_indices(moves) do
+    (for <<byte::8 <- :binary.encode_unsigned(moves, :little)>>, do: byte)
+    |> Stream.with_index()
+    |> Stream.flat_map(fn {x, i} -> lookup_move_indices(x, i) end)
   end
 
   for byte <- 0..255 do
     move_offsets = 0..7 |> Enum.filter(fn x -> ((1 <<< x) &&& byte) != 0 end)
     for offset_byte <- 0..7 do
-      moves = Enum.map(move_offsets, fn x -> 1 <<< (x + offset_byte * 8) end)
-      defp lookup_moves(unquote(byte), unquote(offset_byte)), do: unquote(moves)
+      indices = Enum.map(move_offsets, fn x -> x + offset_byte * 8 end)
+      moves = Enum.map(indices, fn x -> 1 <<< x end)
+      defp lookup_move_list(unquote(byte), unquote(offset_byte)), do: unquote(moves)
+      defp lookup_move_indices(unquote(byte), unquote(offset_byte)), do: unquote(indices)
     end
   end
-
 
   def legal_move?(board, move) do
     legals = get_legal_moves(board)
@@ -246,22 +254,22 @@ defmodule Board do
     new_you = you ^^^ to_flip
 
     if board.turn == @turn_black do
-      {new_me, new_you}
+      %{board | black: new_me, white: new_you}
     else
-      {new_you, new_me}
+      %{board | black: new_you, white: new_me}
     end
   end
 
-  def flip_loop(mask, dir, you, acc) when mask != 0 and ((mask &&& you) != 0) do
+  defp flip_loop(mask, dir, you, acc) when mask != 0 and ((mask &&& you) != 0) do
     new_mask = flip_bits(mask, dir)
     flip_loop(new_mask, dir, you, acc ||| mask)
   end
 
-  def flip_loop(mask, _dir, _you, acc) do
+  defp flip_loop(mask, _dir, _you, acc) do
     {mask, acc}
   end
 
-  def flip_bits(move, dir) do
+  defp flip_bits(move, dir) do
     case dir do
       0 -> (move <<< 8) &&& 0xffffffffffffff00  # Up
       1 -> (move <<< 7) &&& 0x7f7f7f7f7f7f7f00  # Up Right

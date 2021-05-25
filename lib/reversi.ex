@@ -1,15 +1,11 @@
 defmodule Reversi do
   @moduledoc """
-  Documentation for `Reversi`.
+  module for reversi
   """
 
   @doc """
-  Hello world.
 
   ## Examples
-
-      iex> Reversi.hello()
-      :world
 
   """
 
@@ -19,7 +15,7 @@ defmodule Reversi do
       {true, true} ->
         # Both players pass = game is done
         IO.puts Board.to_string(board)
-        IO.puts "Game is done"
+        game_end(board)
       {false, true} ->
         # Current turn is a pass
         IO.puts Board.to_string(board)
@@ -48,8 +44,7 @@ defmodule Reversi do
       case Board.coord_to_bits(xy) do
         {:ok, move} ->
           if Board.legal_move?(board, move) do
-            {black, white} = Board.flip(board, move)
-            {:ok, %{board | black: black, white: white}}
+            {:ok, Board.flip(board, move)}
           else
             {:error,"#{xy} is NOT legal!" }
           end
@@ -71,8 +66,20 @@ defmodule Reversi do
 
   def ai_turn(board, ai_fn) do
     move = ai_fn.(board)
-    {black, white} = Board.flip(board, move)
-    %{board | black: black, white: white}
+    Board.flip(board, move)
+  end
+
+  def game_end(board) do
+    b = board.black |> Board.popcount()
+    w = board.white |> Board.popcount()
+    cond do
+      b > w ->
+        IO.puts "Black: #{b}, White: #{w}\nThe winner is BLACK!"
+      w < b ->
+        IO.puts "Black: #{b}, White: #{w}\nThe winnger is WHITE!"
+      true ->
+        IO.puts "Black: #{b}, White: #{w}\nIt's a tie!"
+    end
   end
 
 end
@@ -80,12 +87,18 @@ end
 defmodule Reversi.CLI do
   def main(argv) do
     {options, _, _} = OptionParser.parse(argv,
-      switches: [player: :integer]
+      switches: [player: :integer, mcts: :boolean, simcount: :integer]
     )
     player = if options[:player] < 0, do: Board.turn_black, else: Board.turn_white
     board = Board.new()
-    # mcts_tables = MCTS.init(board)
-    ai_fn = &RandomAI.turn/1
+    ai_init = if options[:mcts], do: &MCTS.init/0, else: &RandomAI.init/0
+    ai_init.()
+    ai_fn = if options[:mcts] do 
+      sim_count = options[:simcount]
+      fn x -> MCTS.turn(x, sim_count) end
+    else
+      &RandomAI.turn/1
+    end
     Reversi.game_loop(board, player, false, ai_fn)
   end
 end
